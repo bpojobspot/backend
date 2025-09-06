@@ -1,13 +1,26 @@
-# Build stage
-FROM maven:3.9.6-eclipse-temurin-21 AS build
-WORKDIR /app
-COPY . .
-RUN mvn -DskipTests=true clean package
+# 1. Use a base image with Java & Maven
+FROM maven:3.9.6-eclipse-temurin-17 AS build
 
-# Run stage
-FROM eclipse-temurin:21-jdk
+# 2. Set working directory
 WORKDIR /app
+
+# 3. Copy pom.xml and download dependencies
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+
+# 4. Copy source and build jar
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# 5. Use lightweight JDK to run the app
+FROM eclipse-temurin:17-jdk-alpine
+WORKDIR /app
+
+# Copy jar from build stage
 COPY --from=build /app/target/*.jar app.jar
-# Render injects $PORT; Spring reads it via server.port=${PORT}
-ENV JAVA_TOOL_OPTIONS="-Xmx256m -XX:+UseSerialGC"
-CMD ["java", "-Dserver.port=${PORT}", "-jar", "app.jar"]
+
+# Expose port 8080
+EXPOSE 8080
+
+# Run app
+ENTRYPOINT ["java","-jar","app.jar"]
